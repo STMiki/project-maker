@@ -14,7 +14,7 @@ import pathlib
 import argparse
 import importlib
 
-ROOT = pathlib.Path(__file__).parent.resolve()
+ROOT = pathlib.Path(__file__).resolve().parent.resolve()
 TEMPLATE_DIR =  os.path.join(ROOT, "templates")
 
 languages = []
