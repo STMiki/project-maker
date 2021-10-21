@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""
+supported languages:
+  {languages}
+
+current template:
+{templates}
+"""
+import sys
+import os
+import json
+import shutil
+import pathlib
+import argparse
+import importlib
+
+ROOT = pathlib.Path(__file__).parent.resolve()
+TEMPLATE_DIR =  os.path.join(ROOT, "templates")
+
+languages = []
+
+def import_module(rawPath: str):
+    path = pathlib.Path(rawPath)
+    moduleName = path.stem
+    modulePath = path.parent
+
+    if modulePath.parent not in sys.path:
+        sys.path.append(str(modulePath))
+
+    return importlib.import_module(moduleName)
+
+def scandir(path: str, *paths: [str]) -> [str]:
+    path = os.path.join(path, *paths)
+    result = []
+    with os.scandir(path) as it:
+        for entry in it:
+            if entry.is_dir() and not entry.name.startswith("_"):
+                result.append(entry.name)
+    return result
+
+def helptemplate():
+    """"""
+    result = ""
+    for lang in languages:
+        templates = scandir(TEMPLATE_DIR, lang)
+        result += "  " + lang + ':' + os.linesep
+        for template in templates:
+            result += "    " + template + os.linesep
+        if len(templates) == 0:
+            result += "    No template found"
+        result += os.linesep
+    return result
+
+def main(args) -> None:
+    """"""
+    global languages
+
+    # find paths
+    if args.remote:
+        # os.system("git clone " + args.remote)
+        projectPath = args.remote.split('/')[-1]
+        if projectPath.endswith(".git"):
+            projectPath = projectPath[:-4]
+    else:
+        projectPath = args.name
+
+    templates = args.template or args.multi
+
+    # import build module from template
+    languageBuilderPath = os.path.join(TEMPLATE_DIR, args.language, args.language + '.py')
+    builder = import_module(languageBuilderPath)
+
+    # init git
+    if not args.git and not args.remote:
+        os.system("git init " + projectPath)
+    elif not args.remote:
+        os.mkdir(projectPath)
+    elif args.remote:
+        os.system("git clone " + args.remote)
+
+    # build
+    builder.build(
+        name=args.name,
+        path=projectPath,
+        template=templates
+    )
+
+if __name__ == "__main__":
+    # os.chdir(pathlib.Path(__file__).parent.resolve())
+    languages = scandir(TEMPLATE_DIR)
+
+    parser = argparse.ArgumentParser(
+        prog="mkproject",
+        description="Create and init project",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=__doc__.format(languages=', '.join(languages), templates=helptemplate())
+    )
+
+    parser.add_argument("name", type=str, help="Project name")
+    parser.add_argument("language", type=str, help="Language of the project")
+    parser.add_argument("template", type=str, nargs='?', help="Template")
+    parser.add_argument("-m", dest="multi", type=str, nargs=2, metavar=('name', 'template'), action="append", help="for nested project")
+    parser.add_argument("--remote", type=str, help="git url of the project")
+    parser.add_argument("--no-git", dest="git", action="store_true", help="don't initialize git")
+
+    args = parser.parse_args()
+
+    if args.multi == None and args.template == None:
+        parser.error("You must specify either a template or a multi target (see -m)")
+
+    if args.language not in languages:
+        parser.error("Language '" + args.language + "' not found")
+
+    templates = scandir(os.path.join(TEMPLATE_DIR, args.language))
+    if args.template:
+        if args.template not in templates:
+            parser.error("Template '" + args.template + "' not found")
+
+    if args.multi:
+        for _, template in args.multi:
+            if template not in templates:
+                parser.error("Template '" + template + "' not found")
+
+    main(args)
