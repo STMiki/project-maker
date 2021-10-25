@@ -77,6 +77,32 @@ class ConanFile():
             result += opt + "\n"
         return result + "\n"
 
+class ConfigFile():
+    """"""
+
+    need_init = []
+    deps = []
+
+    def __init__(self, path: str):
+        # Open and read file
+        with open(j(path, CONFIG_FILE), 'r') as f:
+            self.json = json.load(f)
+
+        self.keys = self.json.keys()
+
+        # Need init
+        self.need_init = []
+        if "need_init" in self.keys:
+            need_init = self.json["need_init"]
+            for data in need_init:
+                file = data if type(data) is type(str()) else j("", *data)
+                self.need_init.append(file)
+
+        # Deps
+        self.deps = []
+        if "deps" in self.keys:
+            self.deps = self.json["deps"]
+
 def j(*paths):
     return os.path.join(*paths)
 
@@ -109,10 +135,11 @@ find_package(Threads)
     with open(j(path, "CMakeLists.txt"), 'w') as f:
         f.write(generate_cmake.__doc__.replace("<PNAME>", name))
 
-def copyWithProjectName(fileName, projectName, loc, path, dest = ""):
+def copyWithProjectName(fileName, projectName, loc, path, dest = "", append=True):
+    mode = 'a' if append else 'w'
     shutil.copyfile(j(loc, fileName), j(path, dest, fileName + ".temp"))
     with open(j(path, dest, fileName + ".temp"), "r") as inf:
-        with open(j(path, dest, fileName), "a") as outf:
+        with open(j(path, dest, fileName), mode) as outf:
             for line in inf:
                 outf.write(line.replace("<PNAME>", projectName))
     os.remove(j(path, dest, fileName + ".temp"))
@@ -134,14 +161,10 @@ def init_common(path: str, name: str) -> None:
     shutil.copytree(commonPath, path, dirs_exist_ok=True)
     os.remove(j(path, CONFIG_FILE))
 
-    with open(j(commonPath, CONFIG_FILE), "r") as file:
-        config = json.loads(file.read())
+    config = ConfigFile(commonPath)
 
-    need_init = config["need_init"] if "need_init" in config.keys() else []
-
-    for data in need_init:
-        file = data if type(data) is type(str()) else j("", *data)
-        copyWithProjectName(file, name, commonPath, path)
+    for file in config.need_init:
+        copyWithProjectName(file, name, commonPath, path, append=False)
 
 # TODO: need to change how _multi folder works
 def init_multi(path: str, name: str, subName: str):
@@ -166,28 +189,27 @@ def build(name: str, path: str, template, recursive=False):
             deps += build(subName, j(path, subName), subTemplate, recursive=True)
             init_multi(path, name, subName)
             conan.read(j(path, subName, "conanfile.txt"))
+            pathlib.Path(j(path, subName, "conanfile.txt")).unlink()
         init_deps(path, deps)
+        # TODO: change this to support multi template
         init_common(path, name)
         conan.write(j(path, "conanfile.txt"))
-        pathlib.Path(j(path, subName, "conanfile.txt")).unlink()
         return
 
     templatePath = j(ROOT, template)
 
-    with open(j(templatePath, CONFIG_FILE), "r") as f:
-        config = json.loads(f.read())
-    need_init = config["need_init"] if "need_init" in config.keys() else []
+    config = ConfigFile(templatePath)
 
-    shutil.copytree(templatePath, path, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*need_init))
+    shutil.copytree(templatePath, path, dirs_exist_ok=True, ignore=shutil.ignore_patterns(*config.need_init))
     os.remove(j(path, CONFIG_FILE))
 
     if not recursive:
         generate_cmake(path, name)
 
-    for data in need_init:
+    for data in config.need_init:
         copyWithProjectName(data, name, templatePath, path)
 
     if recursive:
-        return config["deps"]
-    init_deps(path, config["deps"])
+        return config.deps
+    init_deps(path, config.deps)
     init_common(path, name)

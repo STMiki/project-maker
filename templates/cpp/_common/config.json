@@ -1,5 +1,8 @@
 {
     "need_init": [
+        ["scripts", "build.sh"],
+        ["scripts", "run.sh"],
+        ["scripts", "debug.sh"],
         ".gitignore"
     ]
 }

@@ -57,10 +57,10 @@ def main(args) -> None:
 
     # find paths
     if args.remote:
-        # os.system("git clone " + args.remote)
-        projectPath = args.remote.split('/')[-1]
-        if projectPath.endswith(".git"):
-            projectPath = projectPath[:-4]
+        projectPath = args.name
+        # projectPath = args.remote.split('/')[-1]
+        # if projectPath.endswith(".git"):
+        #     projectPath = projectPath[:-4]
     else:
         projectPath = args.name
 
@@ -72,11 +72,15 @@ def main(args) -> None:
 
     # init git
     if not args.git and not args.remote:
-        os.system("git init " + projectPath)
+        if os.system("git init " + projectPath):
+            print("error: git init failled")
+            sys.exit(1)
     elif not args.remote:
         os.mkdir(projectPath)
     elif args.remote:
-        os.system("git clone " + args.remote)
+        if os.system("git clone " + args.remote + " " + args.name):
+            print("error: git clone failled")
+            sys.exit(1)
 
     # build
     builder.build(
