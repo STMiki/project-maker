@@ -1,0 +1,9 @@
+{
+    "deps": [
+
+    ],
+    "need_init": [
+        "CMakeLists.txt",
+        "README.md"
+    ]
+}
